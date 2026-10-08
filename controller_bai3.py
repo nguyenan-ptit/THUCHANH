@@ -1,7 +1,7 @@
 import paho.mqtt.client as mqtt
 import json
 
-BROKER = "localhost"
+BROKER = "broker.emqx.io"
 PORT = 1883
 
 CMD_TOPIC = "iot/lab/light01/cmd"
