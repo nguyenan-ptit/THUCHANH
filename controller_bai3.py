@@ -14,10 +14,10 @@ status_received = threading.Event()
 
 
 def on_connect(client, userdata, flags, reason_code, properties):
-    print("Controller connected to MQTT Broker")
+
 
     client.subscribe(STATUS_TOPIC)
-    print(f"Subscribed to: {STATUS_TOPIC}")
+
 
 
 def on_message(client, userdata, msg):
