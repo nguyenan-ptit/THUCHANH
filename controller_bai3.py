@@ -11,7 +11,8 @@ STATUS_TOPIC = "iot/lab/light01/status"
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
 status_received = threading.Event()
-
+waiting_for_status = False
+lock = threading.Lock()
 
 def on_connect(client, userdata, flags, reason_code, properties):
 
@@ -21,16 +22,21 @@ def on_connect(client, userdata, flags, reason_code, properties):
 
 
 def on_message(client, userdata, msg):
-    payload = msg.payload.decode()
+    global waiting_for_status
 
     try:
-        data = json.loads(payload)
+        data = json.loads(msg.payload.decode())
 
-        print("Trang thai nhan duoc:")
+        if data.get("device_id") != "light01":
+            return
+        with lock:
+            if not waiting_for_status:
+                return
+            waiting_for_status = False
+            status_received.set()
+        print("\nTrang thai nhan duoc:")
         print(json.dumps(data, indent=2))
 
-        # Bao cho vong while biet da nhan duoc trang thai
-        status_received.set()
 
     except json.JSONDecodeError:
         print("Du lieu nhan duoc khong hop le.")
@@ -42,29 +48,32 @@ client.on_message = on_message
 client.connect(BROKER, PORT)
 client.loop_start()
 
+try:
+    while True:
+        command = input("Nhap lenh: ").strip().upper()
 
-while True:
-    command = input("Nhap lenh: ").strip().upper()
+        if command == "EXIT":
+            break
 
-    if command == "EXIT":
-        break
+        if command not in ["ON", "OFF"]:
+            print("Lenh khong hop le. Vui long nhap ON, OFF hoac EXIT.")
+            continue
 
-    if command not in ["ON", "OFF"]:
-        print("Lenh khong hop le. Vui long nhap ON, OFF hoac EXIT.")
-        continue
+        with lock:
+            status_received.clear()
+            waiting_for_status = True
 
-    # Xoa trang thai cu
-    status_received.clear()
+        client.publish(CMD_TOPIC, command)
 
-    client.publish(CMD_TOPIC, command)
+        print(f"Da gui lenh {command} toi light01")
 
-    print(f"Da gui lenh {command} toi light01")
+        # Cho toi da 5 giay
+        if not status_received.wait(timeout=5):
+            with lock:
+                waiting_for_status = False
+            print("Khong nhan duoc trang thai tu light01.")
 
-    # Cho den khi light01 gui status ve
-    status_received.wait()
-
-
-client.loop_stop()
-client.disconnect()
-
-print("Controller stopped.")
+finally:
+    client.loop_stop()
+    client.disconnect()
+    print("Controller stopped.")
